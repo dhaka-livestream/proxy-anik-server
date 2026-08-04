@@ -1,5 +1,5 @@
 // ============================================================
-//  সর্বজনীন মিডিয়া প্রোক্সি (HLS / DASH / TS)
+//  সর্বজনীন মিডিয়া প্রোক্সি (HLS / DASH / TS) - আপডেটেড ভার্সন
 //  Cloudflare Workers-এর জন্য
 // ============================================================
 
@@ -13,10 +13,14 @@ export default {
       return new Response('Missing "url" parameter', { status: 400 });
     }
 
-    // ২. টার্গেট URL থেকে কন্টেন্ট ফেচ করা
+    // ২. টার্গেট URL থেকে কন্টেন্ট ফেচ করা (HTTP ও HTTPS দুই-ই সাপোর্ট করবে)
     const response = await fetch(targetUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Origin': new URL(targetUrl).origin,
+        'Referer': targetUrl,
       }
     });
 
@@ -39,10 +43,18 @@ export default {
       });
 
       // খ) আপেক্ষিক (relative) পাথ যুক্ত লিংক খুঁজে প্রোক্সি করা
-      //    যেমন: "segment_001.ts" বা "../videos/playlist.m3u8"
       const baseUrl = new URL(targetUrl);
       content = content.replace(/(?<=["'\s]|^)([^"'\s<>]+\.(?:ts|m3u8|mpd|key))(?=["'\s]|$)/gi, (match) => {
-        // আপেক্ষিক পাথকে সম্পূর্ণ URL-এ রূপান্তর
+        try {
+          const absoluteUrl = new URL(match, baseUrl).href;
+          return proxyBase + encodeURIComponent(absoluteUrl);
+        } catch (e) {
+          return match; // যদি কনভার্ট না হয়, তাহলে অপরিবর্তিত রাখুন
+        }
+      });
+
+      // গ) শুধু ফাইলনাম (যেমন: "segment_001.ts") যুক্ত লিংক খুঁজে প্রোক্সি করা
+      content = content.replace(/(?<=["'\s]|^)([a-zA-Z0-9_\-]+\.(?:ts|m3u8|mpd|key))(?=["'\s]|$)/gi, (match) => {
         const absoluteUrl = new URL(match, baseUrl).href;
         return proxyBase + encodeURIComponent(absoluteUrl);
       });
@@ -54,17 +66,19 @@ export default {
         headers: {
           'Content-Type': finalContentType,
           'Access-Control-Allow-Origin': '*',
-          'Cache-Control': 'public, max-age=300' // ৫ মিনিট ক্যাশে
+          'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+          'Access-Control-Allow-Headers': '*',
+          'Cache-Control': 'public, max-age=300'
         }
       });
     }
 
     // ৫. যদি এটি সরাসরি .ts বা অন্য কোনো মিডিয়া সেগমেন্ট হয়
-    //    তাহলে সেটিকে CORS হেডার যোগ করে ফেরত দেওয়া
     const newHeaders = new Headers(response.headers);
     newHeaders.set('Access-Control-Allow-Origin', '*');
-    // ক্যাশিং বাড়ানোর জন্য (ঐচ্ছিক)
-    newHeaders.set('Cache-Control', 'public, max-age=86400'); // ১ দিন
+    newHeaders.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    newHeaders.set('Access-Control-Allow-Headers', '*');
+    newHeaders.set('Cache-Control', 'public, max-age=86400');
 
     return new Response(response.body, {
       status: response.status,
