@@ -1,5 +1,5 @@
 // ============================================================
-//  অ্যাডভান্সড মিডিয়া প্রোক্সি (হেডার ও রিডিরেক্ট সহ)
+//  মিডিয়া প্রোক্সি (HLS / DASH) - রেফারার হেডার সহ
 // ============================================================
 
 export default {
@@ -11,27 +11,27 @@ export default {
       return new Response('Missing "url" parameter', { status: 400 });
     }
 
-    // ১. রিডিরেক্ট ফলো করতে এবং হেডার পাঠাতে fetch-এর অপশন
-    const fetchOptions = {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': '*/*',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Origin': new URL(targetUrl).origin,
-        'Referer': targetUrl,
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache'
-      },
-      redirect: 'follow' // রিডিরেক্ট ফলো করবে
+    // 📌 হেডারগুলো সেট করুন (আপনার পাওয়া রেফারার ব্যবহার করে)
+    const customHeaders = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Origin': 'https://itcnbd.live',          // মূল ওরিজিন
+      'Referer': 'https://itcnbd.live/',        // আপনি যে রেফারার পেয়েছেন
+      'Accept': '*/*',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache'
     };
 
-    // ২. টার্গেট URL থেকে কন্টেন্ট ফেচ করা
-    const response = await fetch(targetUrl, fetchOptions);
+    // ২. টার্গেট URL থেকে কন্টেন্ট ফেচ করা (হেডার সহ)
+    const response = await fetch(targetUrl, {
+      headers: customHeaders,
+      redirect: 'follow'
+    });
 
     // ৩. কন্টেন্ট টাইপ চেক করা
     const contentType = response.headers.get('Content-Type') || '';
     const isM3U8 = contentType.includes('mpegurl') || targetUrl.includes('.m3u8');
-    const isMPD  = contentType.includes('dash') || targetUrl.includes('.mpd');
+    const isMPD = contentType.includes('dash') || targetUrl.includes('.mpd');
 
     // ৪. প্লেলিস্ট (M3U8/MPD) প্রক্রিয়াকরণ
     if (isM3U8 || isMPD) {
@@ -40,11 +40,12 @@ export default {
       const proxyBase = url.protocol + '//' + url.host + url.pathname + '?url=';
       const baseUrl = new URL(targetUrl);
 
-      // সব ধরণের লিংক রিপ্লেস করার জন্য শক্তিশালী রেগুলার এক্সপ্রেশন
+      // ক) সম্পূর্ণ URL (http/https) যুক্ত লিংক খুঁজে প্রোক্সি করা
       content = content.replace(/(https?:\/\/[^\s<>"']+\.(?:ts|m3u8|mpd|key|m4s))/gi, (match) => {
         return proxyBase + encodeURIComponent(match);
       });
 
+      // খ) আপেক্ষিক (relative) পাথ যুক্ত লিংক খুঁজে প্রোক্সি করা
       content = content.replace(/(?<=["'\s]|^)([^"'\s<>]+\.(?:ts|m3u8|mpd|key|m4s))(?=["'\s]|$)/gi, (match) => {
         try {
           const absoluteUrl = new URL(match, baseUrl).href;
