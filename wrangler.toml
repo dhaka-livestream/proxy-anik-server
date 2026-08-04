@@ -1,10 +1,3 @@
-name = "anik-crosserver"
+name = "proxy"
 main = "src/index.js"
 compatibility_date = "2024-12-18"
-
-# এখানে আপনি চাইলে ভেরিয়েবল যোগ করতে পারেন
-[vars]
-
-# প্রোডাকশন এনভায়রনমেন্ট (ঐচ্ছিক)
-[env.production]
-vars = { }
